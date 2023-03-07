@@ -1,32 +1,4 @@
-# Spider Plugins
-
-[![Run E2E Kind Test](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml/badge.svg)](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml)
-
-Some legacy applications expect to be directly connected to the physical network. The Pod has the performance of the physical network and with real source IP. In this type of situation, you maybe use the MacVlan or SR-IoV CNI to achieve this. And if you use MacVlan CNI, you maybe be run into some network communication bugs, the following examples below:
-
-- The pod can't access to service clusterIP.
-- The pod can't access to other network's pod.
-- The pod can't access to node(The master interface on node and sub-interface cannot communicate directly)
-
-So spider plugins work on solving communication issues in multi-CNI and multi-NIC mode. The list of plugins that have been developed so far is shown below:
-
-- **Veth**: Work for Macvlan CNI、SR-IOV CNI etc. Solve the problem that MacVlan Pod cannot communicate with ClusterIP when it is the default CNI.
-
-> NOTE: Note that it is in an early stage, and while we welcome usage and experimentation, You are welcome to open issue or PR if you could run into bugs.
-
-## How it works
-
-Similar to the way [CNI Meta plugins](https://github.com/containernetworking/plugins/tree/main/plugins/meta) work, It is not used to create interface and is often called after the [CNI Main plugin](https://github.com/containernetworking/plugins/tree/main/plugins/main) call.
-For more information, see the [CNI Plugins](https://www.cni.dev/plugins/current/).
-
-![](docs/images/veth.svg)
-
-The diagram is a schematic of how the Veth plugin works: 
-
-- Creates a veth pair device, One end of the veth pair is placed inside a container and the other end resides on the host.
-- Hijacks traffic sent from Pod to cluster to be forwarded by veth pair device.
-
-## Quick Start
+# Quick-start
 
 _*Prerequisites*_:
 
@@ -82,7 +54,7 @@ kubectl get network-attachment-definitions -n kube-system macvlan-conf -o yaml
 
 2. Creating a macvlan pod that uses `Network-Attachment-Definition`: `macvlan-conf`
 
-We can specify the default cluster network in pods with the `v1.multus-cni.io/default-network` annotation. In this example, We specify Macvlan CNI as the default cluster CNI for the Pod: 
+We can specify the default cluster network in pods with the `v1.multus-cni.io/default-network` annotation. In this example, We specify Macvlan CNI as the default cluster CNI for the Pod:
 
 ```shell
 cat <<EOF | kubectl create -f -
@@ -154,14 +126,3 @@ PING 10.233.119.208 (10.233.119.208): 56 data bytes
 1 packets transmitted, 1 packets received, 0% packet loss
 round-trip min/avg/max = 0.631/0.631/0.631 ms
 ```
-
-## Features
-
-- Support Macvlan/SR-IOV pod can be access ClusterCIDR, ServiceCIDR etc.
-- When Pod has multiple interfaces, Support inter-communication between different interfaces (networks) by setting policy route table.
-- Support for setting specific mac addresses for Pods.
-- Dual-stack enabled.
-
-## Contribution
-
-For any questions about Spider-plugins, feel free to open up a GitHub issue :)

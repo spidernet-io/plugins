@@ -1,0 +1,141 @@
+name: Run E2E Kind Test
+
+env:
+  CI_IMAGE_REPO: ghcr.io/spidernet-io/cni-plugins/meta-plugins
+
+on:
+  schedule:
+    # each day
+    - cron: "0 20 * * *"
+  push:
+    branches:
+      - main
+      - v*
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  get_ref:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.result.outputs.ref }}
+      run_e2e: ${{ steps.get_ref.outputs.run_e2e }}
+    steps:
+      - name: Check Code Changes
+        uses: dorny/paths-filter@v2.11.1
+        if: ${{ github.event_name == 'pull_request_target' }}
+        id: filter_pr
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          filters: |
+            run_e2e:
+              - '**/*.sh'
+              - '**/*.go'
+              - 'go.mod'
+              - 'test/*'
+              - 'go.sum'
+              - 'Makefile*'
+              - '**/Makefile*'
+
+      - name: Get Ref
+        id: get_ref
+        run: |
+          if ${{ github.event_name == 'push' }} ; then
+            echo "trigger by push"
+            echo ::set-output name=tag::${{ github.sha }}
+            echo ::set-output name=push::false
+            echo ::set-output name=run_e2e::true
+          elif ${{ github.event_name == 'pull_request_target' }} ; then
+            echo "trigger by pull_request_target"
+            echo ::set-output name=tag::${{ github.event.pull_request.head.sha }}
+            echo ::set-output name=push::false
+            if ${{ steps.filter_pr.outputs.run_e2e == 'true' }} ; then
+                # run all e2e
+                echo ::set-output name=run_e2e::true
+            fi
+          else
+            # schedule event
+            # use main sha for e2e image tag
+            echo "trigger by schedule"
+            echo ::set-output name=tag::main
+            echo ::set-output name=push::false
+            # nightly ci, run all e2e
+            echo ::set-output name=run_e2e::true
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ steps.get_ref.outputs.tag }}
+
+      - name: Result Ref
+        id: result
+        run: |
+          git_ref=$( git show -s --format='format:%H')
+          echo "ref=${git_ref}" >> $GITHUB_OUTPUT
+
+  call_build_binary:
+    needs: [get_ref]
+    if: ${{ needs.get_ref.outputs.run_e2e == 'true' }}
+    uses: ./.github/workflows/bin-build.yaml
+    with:
+      ref: ${{ needs.get_ref.outputs.ref }}
+    secrets: inherit
+
+  call_e2e_dual_calico:
+    needs: [get_ref,call_build_binary]
+    if: ${{ needs.get_ref.outputs.run_e2e == 'true' }}
+    uses: ./.github/workflows/e2e-init.yaml
+    with:
+      ip_family: dual
+      default_cni: k8s-pod-network
+      push: false
+      ref: ${{ needs.get_ref.outputs.ref }}
+    secrets: inherit
+
+  call_e2e_ipv4_calico:
+    needs: [get_ref,call_build_binary]
+    if: ${{ needs.get_ref.outputs.run_e2e == 'true' }}
+    uses: ./.github/workflows/e2e-init.yaml
+    with:
+      ip_family: ipv4
+      default_cni: k8s-pod-network
+      push: false
+      ref: ${{ needs.get_ref.outputs.ref }}
+    secrets: inherit
+
+  call_e2e_ipv6_calico:
+    needs: [get_ref,call_build_binary]
+    if: ${{ needs.get_ref.outputs.run_e2e == 'true' }}
+    uses: ./.github/workflows/e2e-init.yaml
+    with:
+      ip_family: ipv6
+      default_cni: k8s-pod-network
+      push: false
+      ref: ${{ needs.get_ref.outputs.ref }}
+    secrets: inherit
+
+  create_e2e_issue:
+    needs: [call_e2e_dual_calico,call_e2e_ipv4_calico,call_e2e_ipv6_calico]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && always() && !cancelled() && contains(needs.*.result, 'failure')
+    steps:
+      - name: echo
+        run: |
+          echo ${{ github.repository }}
+          echo ${{ github.repository_owner }}
+          echo "TIMESTAMP=`date +%Y-%m-%d`" >> $GITHUB_ENV
+      - name: create an issue
+        uses: dacbd/create-issue-action@v1.2.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Auto E2E CI ${{ ENV.TIMESTAMP }}: Failed(Auto Create)"
+          body: |
+            action url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          labels: "kind/bug"
+          assignees: "cyclinder"

@@ -54,7 +54,7 @@ var _ = Describe("config", func() {
 			}
 			var want = &ty.RPFilter{
 				Enable: pointer.Bool(true),
-				Value:  2,
+				Value:  0,
 			}
 			validateRPFilterConfig(config)
 			Expect(config).To(Equal(want))

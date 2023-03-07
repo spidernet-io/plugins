@@ -28,17 +28,20 @@ CNI_PACKAGE_PATH=${PROJECT_ROOT_PATH}/.tmp/plugins/${PACKAGE_NAME}
 
 echo ${CNI_PACKAGE_PATH}
 
-ls /home/spider-plugins-*.tar
-[ "$?" != "0"] && echo "spider plugins no found" && exit 2
-SPIDER_PLUGINS_FILES_PATH=`ls /home/spider-plugins-*.tar`
+ls ${PROJECT_ROOT_PATH}/.tmp/spider-plugins-linux-amd64-*.tar
+[ "$?" != "0" ] && echo "spider plugins no found" && exit 2
+SPIDER_PLUGINS_FILE_PATH=`ls ${PROJECT_ROOT_PATH}/.tmp/spider-plugins-linux-amd64-*.tar`
+SPIDER_PLUGINS_FILE_NAME=${SPIDER_PLUGINS_FILE_PATH##*/}
+mv ${PROJECT_ROOT_PATH}/.tmp/${SPIDER_PLUGINS_FILE_NAME} ${PROJECT_ROOT_PATH}/.tmp/plugins/
+
+ls ${PROJECT_ROOT_PATH}/.tmp/plugins/
 
 kind_nodes=`docker ps  | egrep "kindest/node.* ${IP_FAMILY}-(control-plane|worker)"  | awk '{print $1}'`
 for node in ${kind_nodes} ; do
-  echo "install cni-plugins to kind-node: ${node} "
-  docker cp ${CNI_PACKAGE_PATH} $node:/root/
+  docker cp ${PROJECT_ROOT_PATH}/.tmp/plugins/${PACKAGE_NAME} $node:/root/
   docker exec $node tar xvfzp /root/${PACKAGE_NAME} -C /opt/cni/bin
-  docker cp ${SPIDER_PLUGINS_FILES_PATH} $node:/root/
-  docker exec $node tar xvfzp /root/${SPIDER_PLUGINS_FILES_PATH} -C /opt/cni/bin
+  docker cp ${PROJECT_ROOT_PATH}/.tmp/plugins/${SPIDER_PLUGINS_FILE_NAME} $node:/root/
+  docker exec $node tar -xvf /root/${SPIDER_PLUGINS_FILE_NAME} -C /opt/cni/bin
 done
 
 echo -e "\033[35m Succeed to install cni-plugins to kind-node \033[0m"

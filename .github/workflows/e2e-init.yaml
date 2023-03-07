@@ -1,9 +1,5 @@
 name: call e2e
 
-env:
-  CI_IMAGE_REPO: ghcr.io/spidernet-io/cni-plugins/meta-plugins
-  PERFORMANCESCRIPT: "./tools/scripts/e2eperformance.sh"
-
 on:
   workflow_call:
     inputs:
@@ -54,7 +50,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: binary_files
-          path: /home
+          path: .tmp
 
       - name: Install
         id: install

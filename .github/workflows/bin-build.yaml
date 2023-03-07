@@ -1,11 +1,6 @@
 name: Binary build
 
 on:
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-      - reopened
   workflow_call:
     inputs:
       ref:
@@ -14,10 +9,6 @@ on:
       tag:
         required: false
         type: string
-  push:
-    branch:
-      tags:
-        - main
 
 permissions: write-all
 
@@ -65,10 +56,12 @@ jobs:
           fi
 
       - name: Build
-        run:
+        run: |
           make build ARCH=${{ matrix.go_arch }} GIT_TAG=${{ steps.tag.outputs.tag }}
           if [ "${{ steps.tag.outputs.upload }}" == "true" ]; then
-            cd ./.tmp/bin && tar -cvzf /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar *
+            sudo mkdir -p /home/spider/
+            cd ./.tmp/bin
+            sudo tar -cvzf /home/spider/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar *
           fi
 
       - name: Upload Binary artifact
@@ -76,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v3.1.0
         with:
           name: binary_files
-          path: /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar
+          path: /home/spider/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar
           retention-days: 1

@@ -14,13 +14,23 @@ PROJECT_ROOT_PATH=$( cd ${CURRENT_DIR_PATH}/../.. && pwd )
 MACVLAN_MASTER=${MACVLAN_MASTER:-eth0}
 MACVLAN_TYPE=${MACVLAN_TYPE:-macvlan-standalone}
 
-
-
-if [ ${RUN_ON_LOCAL} == false ]; then
-  MULTUS_HELM_OPTIONS+=" --set multus.image.registry=ghcr.io \
-  --set sriov.images.sriovCni.registry=ghcr.io \
-  --set sriov.images.sriovDevicePlugin.registry=ghcr.io "
-fi
+case ${IP_FAMILY} in
+  ipv4)
+    SERVICE_HIJACK_SUBNET="[\"${CLUSTER_SERVICE_SUBNET_V4}\"]"
+    OVERLAY_HIJACK_SUBNET="[\"${CLUSTER_POD_SUBNET_V4}\"]"
+    ;;
+  ipv6)
+    SERVICE_HIJACK_SUBNET="[\"${CLUSTER_SERVICE_SUBNET_V6}\"]"
+    OVERLAY_HIJACK_SUBNET="[\"${CLUSTER_POD_SUBNET_V6}\"]"
+    ;;
+  dual)
+    SERVICE_HIJACK_SUBNET="[\"${CLUSTER_SERVICE_SUBNET_V4}\",\"${CLUSTER_SERVICE_SUBNET_V6}\"]"
+    OVERLAY_HIJACK_SUBNET="[\"${CLUSTER_POD_SUBNET_V4}\",\"${CLUSTER_POD_SUBNET_V6}\"]"
+    ;;
+  *)
+    echo "the value of IP_FAMILY: ipv4 or ipv6 or dual"
+    exit 1
+esac
 
 git clone https://github.com/k8snetworkplumbingwg/multus-cni.git
 cat multus-cni/deployments/multus-daemonset-thick.yml | kubectl apply --kubeconfig ${E2E_KUBECONFIG} -f -
@@ -35,13 +45,6 @@ apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
   annotations:
-    v1.multus-underlay-cni.io/coexist-types: '["macvlan-standalone"]'
-    v1.multus-underlay-cni.io/default-cni: "true"
-    v1.multus-underlay-cni.io/instance-type: macvlan_standalone
-    v1.multus-underlay-cni.io/underlay-cni: "true"
-    v1.multus-underlay-cni.io/vlanId: "${MACVLAN_VLANID}"
-  labels:
-    v1.multus-underlay-cni.io/instance-status: enable
   name: macvlan-standalone-vlan${MACVLAN_VLANID}
   namespace: kube-system
 spec:

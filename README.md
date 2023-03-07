@@ -1,6 +1,7 @@
 # Spider Plugins
 
-[![Run E2E Kind Test](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml/badge.svg)](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml)
+[![Run E2E Kind Test](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml/badge.svg?branch=main)](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml)
+[![Auto Golang Lint And Unitest](https://github.com/spidernet-io/plugins/actions/workflows/lint-golang.yaml/badge.svg?branch=main)](https://github.com/spidernet-io/plugins/actions/workflows/lint-golang.yaml)
 
 Some legacy applications expect to be directly connected to the physical network. The Pod has the performance of the physical network and with real source IP. In this type of situation, you maybe use the MacVlan or SR-IoV CNI to achieve this. And if you use MacVlan CNI, you maybe be run into some network communication bugs, As shown the following issues below:
 

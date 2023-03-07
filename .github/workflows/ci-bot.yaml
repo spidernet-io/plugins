@@ -22,12 +22,14 @@ env:
     kind/feature
     kind/bug
     kind/doc
+    kind/ci
     kind/cleanup
     label-kind
     label-enhancement
     label-question
     label-kind/bug
     label-kind/doc
+    label-kind/ci
     label-kind/feature
     label-kind/cleanup
 

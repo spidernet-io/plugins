@@ -2,7 +2,7 @@
 
 [![Run E2E Kind Test](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml/badge.svg)](https://github.com/spidernet-io/plugins/actions/workflows/e2e-test.yaml)
 
-Some legacy applications expect to be directly connected to the physical network. The Pod has the performance of the physical network and with real source IP. In this type of situation, you maybe use the MacVlan or SR-IoV CNI to achieve this. And if you use MacVlan CNI, you maybe be run into some network communication bugs, the following examples below:
+Some legacy applications expect to be directly connected to the physical network. The Pod has the performance of the physical network and with real source IP. In this type of situation, you maybe use the MacVlan or SR-IoV CNI to achieve this. And if you use MacVlan CNI, you maybe be run into some network communication bugs, As shown the following issues below:
 
 - The pod can't access to service clusterIP.
 - The pod can't access to other network's pod.
@@ -19,6 +19,8 @@ So spider plugins work on solving communication issues in multi-CNI and multi-NI
 Similar to the way [CNI Meta plugins](https://github.com/containernetworking/plugins/tree/main/plugins/meta) work, It is not used to create interface and is often called after the [CNI Main plugin](https://github.com/containernetworking/plugins/tree/main/plugins/main) call.
 For more information, see the [CNI Plugins](https://www.cni.dev/plugins/current/).
 
+`Veth` creates a veth pair and forwards traffic within the cluster through the veth pair device:
+
 ![](docs/images/veth.svg)
 
 The diagram is a schematic of how the Veth plugin works: 
@@ -28,7 +30,7 @@ The diagram is a schematic of how the Veth plugin works:
 
 ## Quick Start
 
-_*Prerequisites*_:
+_**Prerequisites**_:
 
 - You first have installed Kubernetes and have configured a default network(Such as calico)
 - Install multus: Refer to [Install multus](https://github.com/k8snetworkplumbingwg/multus-cni/blob/master/docs/quickstart.md)
@@ -70,8 +72,8 @@ EOF
 
 Note:
 
-- This example uses `ens192` as the master parameter, this master parameter should match the interface name on the hosts in your cluster
-- This example uses `spiderpool` as the `ipam` parameter. More detail about spiderpool refer to [Spiderpool]()
+- This example uses `ens192` as the master parameter, this master parameter should match the interface name on the hosts in your cluster.
+- This example uses `spiderpool` as the `ipam` parameter. More details about spiderpool refer to [Spiderpool](https://spidernet-io.github.io/spiderpool/).
 - `cluster_cidr` and `service_cidr` parameters should match the networking cidr on your cluster.
 
 You can see which configurations you've created using kubectl here's how you can do that:

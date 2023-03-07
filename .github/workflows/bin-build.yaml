@@ -45,20 +45,20 @@ jobs:
       run: |
         if ${{ inputs.ref != '' }} ; then
           echo "call by workflow_call"
-          echo ::set-output name=upload::true
-          echo "tag=${{ inputs.ref }}" >> $GITHUB_ENV
+          echo "upload=true" >> $GITHUB_OUTPUT
+          echo "tag=${{ inputs.ref }}" >> $GITHUB_OUTPUT
         elif ${{ inputs.tag != '' }} ; then
           echo "call by workflow_call(release push)"
-          echo ::set-output name=upload::true
-          echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          echo "upload=true" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
         elif ${{ github.event_name == 'push' }} ; then
           echo "trigger by push"
-          echo ::set-output name=upload::false
-          echo "tag=main" >> $GITHUB_ENV
+          echo "upload=false" >> $GITHUB_OUTPUT
+          echo "tag=main" >> $GITHUB_OUTPUT
         elif ${{ github.event_name == 'pull_request_target' }} ; then
           echo "trigger by pull_request_target"
-          echo ::set-output name=upload::false
-          echo "tag=dev" >> $GITHUB_ENV
+          echo "upload=false" >> $GITHUB_OUTPUT
+          echo "tag=dev" >> $GITHUB_OUTPUT
         else
           echo "unexpected event: ${{ github.event_name }}"
           exit 1
@@ -71,13 +71,13 @@ jobs:
       if: ${{ steps.tag.outputs.upload == 'true' }}
       run: |
         sudo mkdir -p /home/plugins
-        cd ./.tmp/bin
-        tar -cvzf /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ inputs.tag }}.tar *
+        sudo cd ./.tmp/bin
+        sudo tar -cvzf /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar *
 
     - name: Upload Binary artifact
       if: ${{ steps.tag.outputs.upload == 'true' }}
       uses: actions/upload-artifact@v3.1.0
       with:
         name: binary_files
-        path: /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ inputs.tag }}.tar
+        path: /home/spider-plugins-linux-${{ matrix.go_arch }}-${{ steps.tag.outputs.tag }}.tar
         retention-days: 1

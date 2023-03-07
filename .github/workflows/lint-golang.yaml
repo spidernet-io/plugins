@@ -94,16 +94,6 @@ jobs:
           persist-credentials: false
           ref: ${{ needs.filter_changes.outputs.ref }}
 
-      - name: scan chart
-        if: ${{ needs.filter_changes.outputs.chart == 'true' }}
-        run: |
-          make lint_chart_trivy
-
-      - name: scan dockerfile
-        if: ${{ needs.filter_changes.outputs.dockerfile == 'true' }}
-        run: |
-          make lint_dockerfile_trivy
-
       - name: Check module vendoring
         if: ${{ needs.filter_changes.outputs.check == 'true' }}
         run: |

@@ -37,7 +37,7 @@ _**Prerequisites**_:
 - Install multus: Refer to [Install multus](https://github.com/k8snetworkplumbingwg/multus-cni/blob/master/docs/quickstart.md)
 - Install spiderpool(an ipam of kubernetes): Refer to [Install spiderpool](https://github.com/spidernet-io/spiderpool/blob/main/docs/usage/basic.md)
 - Install cni-plugins: Download the [binary files](https://github.com/containernetworking/plugins/releases) and extract it to the `/opt/cni/bin path` of each node.
-- Install spider-plugins:  Download the [binary files]() and extract it to the `/opt/cni/bin path` of each node.
+- Install spider-plugins:  Download the [binary files](https://github.com/spidernet-io/plugins/releases) and extract it to the `/opt/cni/bin path` of each node.
 
 1. Create multus network-attachment-definition crd: `macvlan-conf`:
 

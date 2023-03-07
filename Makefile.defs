@@ -1,0 +1,33 @@
+ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+QUIET := true
+GIT_COMMIT_VERSION =$(shell git show -s --format='format:%H')
+GIT_COMMIT_TIME =$(shell git show -s --format='format:%aI')
+GIT_BRANCH = $(shell git branch --show-current)
+GIT_TAG ?= dev
+
+GO ?= go
+GO_BUILD_TIME = $(shell date "+%Y-%m-%d@%H:%M:%S")
+GO_BUILD = CGO_ENABLED=0 $(GO) build
+GO_BUILD_WITH_CGO = CGO_ENABLED=1 $(CGO_CC) $(GO) build
+GO_BUILD_FLAGS = GOOS=$(GOOS) GOARCH=$(ARCH)
+GO_BUILD_LDFLGAS= -ldflags "-X github.com/spidernet-io/plugins/internal/version.gitCommit=$(GIT_COMMIT_VERSION) \
+-X github.com/spidernet-io/plugins/internal/version.gitBranch=$(GIT_BRANCH) \
+-X github.com/spidernet-io/plugins/internal/version.buildDate=$(GO_BUILD_TIME) \
+-X github.com/spidernet-io/plugins/internal/version.version=$(GIT_TAG)"
+
+ARCH ?= $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+    ARCH=amd64
+endif
+
+GOOS ?= $(shell uname | tr A-Z a-z)
+ifeq ($(GOOS),darwin)
+    GOOS=linux
+endif
+
+QUIET_FLAG :=
+ifeq ($(QUIET),true)
+    QUIET_FLAG=@
+endif
+
+LINT_TRIVY_SEVERITY_LEVEL ?= CRITICAL

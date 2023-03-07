@@ -1,0 +1,102 @@
+name: Auto release
+
+env:
+  ONLINE_REGISTER: ghcr.io
+  ONLINE_REGISTER_USER: ${{ github.actor }}
+  ONLINE_REGISTER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  MERGE_BRANCH: gh-pages
+
+on:
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+
+      - v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tag, sha, branch'
+        required: true
+        default: v1.0.0
+
+jobs:
+  get_ref:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_ref.outputs.tag }}
+    steps:
+      - name: Get Ref
+        id: get_ref
+        run: |
+          tag=""
+          if ${{ github.event_name == 'workflow_dispatch' }} ; then
+            echo "call by self workflow_dispatch"
+            # check tag if valid
+            grep -Eo "v[0-9]+.[0-9]+.[0-9]" <<< ${{ github.event.inputs.tag }} || ' echo "input tag invalid!"; exit 1 '
+            tag=${{ github.event.inputs.tag }}
+            echo ::set-output name=branch::main
+          elif ${{ github.event_name == 'push' }} ; then
+            echo "call by push tag"
+            tag=${GITHUB_REF##*/}
+            echo ::set-output name=branch::${GITHUB_REF##*/}
+          else
+            echo "unexpected event: ${{ github.event_name }}"
+            exit 1
+          fi
+
+          echo "tag: ${tag}"
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          Ybranch=$(grep -Eo "v[0-9]+\.[0-9]+\.0" <<< "${tag}") ||  echo "no create Ybranch..."
+          echo "Ybranch: ${Ybranch} "
+          if [ -n "${Ybranch}" ] ; then
+             echo "create Ybranch..."
+             echo "create_Ybranch=true" >> $GITHUB_OUTPUT
+          else
+             echo "create_Ybranch=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ steps.get_ref.outputs.branch }}
+
+      - name: Create branch
+        if: ${{ steps.get_ref.outputs.create_Ybranch == 'true' }}
+        uses: peterjgrainger/action-create-branch@v2.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          branch: 'release-${{ steps.get_ref.outputs.tag }}'
+          sha: '${{ github.sha }}'
+
+  call-bin-workflow:
+    needs: get_ref
+    uses: ./.github/workflows/bin-build.yaml
+    with:
+      tag: ${{ needs.get_ref.outputs.tag }}
+    secrets: inherit
+
+  create-binary-release:
+    runs-on: ubuntu-latest
+    name: Create Binary Release
+    needs: [get_ref,call-bin-workflow]
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: binary_files
+          path: ./
+
+      - name: Create Release
+        id: create_release
+        uses: ncipollo/release-action@v1.9.0
+        with:
+          artifacts: "*.tar"
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          generateReleaseNotes: true
+          artifactErrorsFailBuild: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.get_ref.outputs.tag }}
+          name: "Release ${{ needs.get_ref.outputs.tag }}"

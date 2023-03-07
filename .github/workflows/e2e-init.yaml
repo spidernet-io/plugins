@@ -1,0 +1,107 @@
+name: call e2e
+
+env:
+  CI_IMAGE_REPO: ghcr.io/spidernet-io/cni-plugins/meta-plugins
+  PERFORMANCESCRIPT: "./tools/scripts/e2eperformance.sh"
+
+on:
+  workflow_call:
+    inputs:
+      ip_family:
+        required: true
+        type: string
+      default_cni:
+        required: true
+        type: string
+      ref:
+        required: false
+        type: string
+      push:
+        required: false
+        type: boolean
+
+jobs:
+  call_e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.0
+          id: go
+
+      - name: Install Ginkgo
+        run:
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.3.0
+
+      # https://github.com/helm/kind-action
+      - name: Install Kind Bin
+        uses: helm/kind-action@v1.4.0
+        with:
+          install_only: true
+
+      - name: Setup Kind Cluster
+        run: |
+            make -C test kind-init IP_FAMILY=${{ inputs.ip_family }}
+
+      - name: Load binary to kind
+        uses: actions/download-artifact@v3
+        with:
+          name: binary_files
+          path: /home
+
+      - name: Install
+        id: install
+        run: |
+          make -C test install IP_FAMILY=${{ inputs.ip_family }}  \
+             DEFAULT_CNI=${{ inputs.default_cni }}
+
+      - name: Setting vlan interface and create remote's client container
+        id: vlan
+        run:
+          make -C test vlan IP_FAMILY=${{ inputs.ip_family }}
+
+      - name: update apt-get sources_repo
+        id: sources_repo
+        run:
+          make -C test update-repo IP_FAMILY=${{ inputs.ip_family }}
+
+      - name: Run E2E
+        id: e2e
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          shell: bash
+          command: |
+            RESULT=0
+            make -C test e2e IP_FAMILY=${{ inputs.ip_family }} DEFAULT_CNI=${{ inputs.default_cni }} || RESULT=$?
+            docker cp ${{ inputs.ip_family }}-control-plane:/var/log/spiderdoctor/controller /tmp/
+            tar zcvf  /tmp/spiderdoctor-report-${{ inputs.ip_family }}-${{ inputs.default_cni }}.tar.gz -C /tmp controller
+            if ((RESULT==0)) ; then
+                echo "RUN_PASS=true" >> $GITHUB_ENV
+            else
+                echo "RUN_PASS=true" >> $GITHUB_ENV
+            fi
+
+      - name: Upload E2E Result
+        id: upload
+        uses: actions/upload-artifact@v3.1.0
+        with:
+          name: spiderdoctor-report-${{ inputs.ip_family }}-${{ inputs.default_cni }}
+          path: /tmp/spiderdoctor-report-${{ inputs.ip_family }}-${{ inputs.default_cni }}.tar.gz
+          retention-days: 1
+
+      - name: Show e2e Result
+        run: |
+          if ${{ env.RUN_PASS == 'true' }} ;then
+              exit 0
+          else
+              exit 1
+          fi

@@ -1,0 +1,186 @@
+name: Auto Golang Lint And Unitest
+
+env:
+  GO_VERSION: "1.19.3"
+
+on:
+  pull_request: {}
+  push:
+    branches:
+      - main
+      - release-*
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+
+permissions: write-all
+
+jobs:
+  filter_changes:
+    name: Deduce required tests from code changes
+    runs-on: ubuntu-latest
+    outputs:
+      check: ${{ steps.result.outputs.check }}
+      ref: ${{ steps.result.outputs.ref }}
+      chart: ${{ steps.result.outputs.chart }}
+      dockerfile: ${{ steps.result.outputs.dockerfile }}
+    steps:
+      - name: Check Go Code Changes
+        uses: dorny/paths-filter@v2.10.2
+        if: ${{ github.event_name == 'pull_request' }}
+        id: filter_pr
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          filters: |
+            src:
+              - .github/workflows/lint-golang.yaml
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            dockerfile:
+              - 'images/**'
+            chart:
+              - 'charts/**'
+
+      - name: Result
+        id: result
+        run: |
+          if ${{ github.event_name == 'push' }} ; then
+              echo "trigger by push"
+              echo "::set-output name=check::true"
+              echo "::set-output name=dockerfile::true"
+              echo "::set-output name=chart::true"
+              echo "::set-output name=ref::${{ github.sha }}"
+          elif ${{ github.event_name == 'pull_request' }} ; then
+              echo "trigger by pull_request"
+              flag=${{ steps.filter_pr.outputs.src }}
+              echo "::set-output name=check::${flag}"
+              echo "::set-output name=dockerfile::${{ steps.filter_pr.outputs.dockerfile }}"
+              echo "::set-output name=chart::${{ steps.filter_pr.outputs.chart }}"
+              ref=${{ github.event.pull_request.head.sha }}
+              echo "::set-output name=ref::${ref}"
+          elif ${{ inputs.ref != '' }} ; then
+              echo "trigger by workflow_call"
+              echo "::set-output name=check::true"
+              echo "::set-output name=dockerfile::true"
+              echo "::set-output name=chart::true"
+              echo "::set-output name=ref::${{ inputs.ref }}"
+          elif ${{ github.event_name == 'workflow_dispatch' }} ; then
+              echo "trigger by workflow_dispatch"
+              echo "::set-output name=check::true"
+              echo "::set-output name=dockerfile::true"
+              echo "::set-output name=chart::true"
+              echo "::set-output name=ref::${{ github.event.inputs.ref }}"
+          else
+              echo "error, unexpected event "
+              exit 1
+          fi
+
+  lint-golang:
+    needs: filter_changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.0
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ needs.filter_changes.outputs.ref }}
+
+      - name: scan chart
+        if: ${{ needs.filter_changes.outputs.chart == 'true' }}
+        run: |
+          make lint_chart_trivy
+
+      - name: scan dockerfile
+        if: ${{ needs.filter_changes.outputs.dockerfile == 'true' }}
+        run: |
+          make lint_dockerfile_trivy
+
+      - name: Check module vendoring
+        if: ${{ needs.filter_changes.outputs.check == 'true' }}
+        run: |
+          go mod tidy
+          go mod vendor
+          if ! test -z "$(git status --porcelain)"; then
+              echo "please run 'go mod tidy && go mod vendor', and submit your changes"
+              exit 1
+          fi
+
+      - name: Run golangci-lint
+        if: ${{ needs.filter_changes.outputs.check == 'true' }}
+        id: golangci_lint
+        continue-on-error: true
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+
+  unitest:
+    needs: filter_changes
+    if: ${{ needs.filter_changes.outputs.check == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Golang/Ginkgo
+        run:
+          GO_PACKAGE="go${{ env.GO_VERSION }}.linux-amd64.tar.gz" ;
+          sudo curl -LO https://go.dev/dl/${GO_PACKAGE} ;
+          sudo tar -xf ${GO_PACKAGE} -C /usr/local/ ;
+          sudo cp /usr/local/go/bin/* /usr/local/bin ;
+          sudo go install github.com/onsi/ginkgo/v2/ginkgo@v2.3.0 ;
+          sudo mv /root/go/bin/ginkgo /usr/local/bin ;
+          sudo go version ;
+          sudo ginkgo version ;
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          ref: ${{ needs.filter_changes.outputs.ref }}
+
+      # ================= unitest
+      - name: Run unitest
+        id: unitest
+        run: |
+          sudo make unit-test
+          if [ $? -ne 0 ]; then
+            echo "outcome=failed" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "outcome=success" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Coverage Artifact
+        if: ${{ steps.unitest.outcome == 'success' }}
+        uses: actions/upload-artifact@v3.1.0
+        with:
+          name: coverage.out
+          path: coverage.out
+          retention-days: 1
+
+      - name: Upload Report Artifact
+        if: ${{ steps.unitest.outcome == 'success' }}
+        uses: actions/upload-artifact@v3.1.0
+        with:
+          name: unitestreport.json
+          path: unitestreport.json
+          retention-days: 1
+
+      # ============= upload coverage report
+      - name: Upload to Codecov
+        if: ${{ steps.unitest.outcome == 'success' }}
+        uses: codecov/codecov-action@v3.1.1
+        with:
+          directory: './'
+          files: 'coverage.out'
+          flags: unittests
+          name: my-codecov-umbrella
+          fail_ci_if_error: true
+          verbose: true
+          # token: ${{ secrets.CODECOV_TOKEN }}

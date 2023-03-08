@@ -172,7 +172,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			logger.Error(err.Error())
 			return err
 		}
-		return nil
 	}
 
 	if err = networking.SysctlRPFilter(netns, conf.RPFilter); err != nil {
@@ -197,23 +196,24 @@ func cmdCheck(args *skel.CmdArgs) error {
 // setupVeth sets up a pair of virtual ethernet devices. move one to the host and other
 // one to container.
 func setupVeth(netns ns.NetNS, firstInvoke bool, containerID string) (string, error) {
+	if !firstInvoke {
+		return getHostVethName(containerID), nil
+	}
 	var hostInterface, containerInterface net.Interface
 	err := netns.Do(func(hostNS ns.NetNS) error {
 		var err error
-		if firstInvoke {
-			hostInterface, containerInterface, err = ip.SetupVethWithName(defaultConVeth, getHostVethName(containerID), defaultMtu, "", hostNS)
-			if err != nil {
-				return err
-			}
+		hostInterface, containerInterface, err = ip.SetupVethWithName(defaultConVeth, getHostVethName(containerID), defaultMtu, "", hostNS)
+		if err != nil {
+			return err
+		}
 
-			link, err := netlink.LinkByName(containerInterface.Name)
-			if err != nil {
-				return err
-			}
+		link, err := netlink.LinkByName(containerInterface.Name)
+		if err != nil {
+			return err
+		}
 
-			if err := netlink.LinkSetUp(link); err != nil {
-				return fmt.Errorf("failed to set %q UP: %v", containerInterface.Name, err)
-			}
+		if err := netlink.LinkSetUp(link); err != nil {
+			return fmt.Errorf("failed to set %q UP: %v", containerInterface.Name, err)
 		}
 		return nil
 	})
@@ -234,11 +234,6 @@ func setupNeighborhood(logger *zap.Logger, netns ns.NetNS, hostVethPairName stri
 		return err
 	}
 
-	logger.Debug("setupNeighborhood",
-		zap.String("hostVethPairName", hostVethPairName),
-		zap.String("hostVethHwAddress", hostVethHwAddress.String()),
-		zap.String("containerVethHwAddress", containerVethHwAddress.String()))
-
 	for _, ipAddr := range preInterfaceIPAddress {
 		if err = networking.AddNeighborTable(hostVethPairName, ipAddr.IP, containerVethHwAddress); err != nil {
 			logger.Error(err.Error())
@@ -246,19 +241,26 @@ func setupNeighborhood(logger *zap.Logger, netns ns.NetNS, hostVethPairName stri
 		}
 	}
 
-	if isfirstInterface {
-		err = netns.Do(func(_ ns.NetNS) error {
-			for _, ipAddr := range ipAddressOnNode {
-				if err := networking.AddNeighborTable(defaultConVeth, ipAddr.IP, hostVethHwAddress); err != nil {
-					return err
-				}
+	if !isfirstInterface {
+		return nil
+	}
+
+	logger.Debug("setupNeighborhood",
+		zap.String("hostVethPairName", hostVethPairName),
+		zap.String("hostVethHwAddress", hostVethHwAddress.String()),
+		zap.String("containerVethHwAddress", containerVethHwAddress.String()))
+
+	err = netns.Do(func(_ ns.NetNS) error {
+		for _, ipAddr := range ipAddressOnNode {
+			if err := networking.AddNeighborTable(defaultConVeth, ipAddr.IP, hostVethHwAddress); err != nil {
+				return err
 			}
-			return nil
-		})
-		if err != nil {
-			logger.Error(err.Error())
-			return err
 		}
+		return nil
+	})
+	if err != nil {
+		logger.Error(err.Error())
+		return err
 	}
 
 	return err
@@ -268,9 +270,10 @@ func setupNeighborhood(logger *zap.Logger, netns ns.NetNS, hostVethPairName stri
 // equivalent to: `ip route add $route`
 func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPairName string, ipAddressOnNode, preInterfaceIPAddress []netlink.Addr, conf *ptypes.Veth) error {
 	err := netns.Do(func(_ ns.NetNS) error {
+		var err error
 		// traffic sent to the node is forwarded via veth0
 		// eq:  "ip r add <ipAddressOnNode> dev veth0 table <ruleTable> "
-		if err := networking.AddRouteTable(logger, ruleTable, defaultConVeth, networking.AddrsToString(ipAddressOnNode)); err != nil {
+		if err = networking.AddRouteTable(logger, ruleTable, defaultConVeth, networking.AddrsToString(ipAddressOnNode)); err != nil {
 			logger.Error("failed to AddRouteTable for ipAddressOnNode", zap.Error(err))
 			return fmt.Errorf("failed to AddRouteTable for ipAddressOnNode: %v", err)
 		}
@@ -296,6 +299,11 @@ func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPair
 		logger.Debug("AddRouteTable for localCIDRs successfully", zap.Strings("localCIDRs", localCIDRs))
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
 	// set routes for host
 	// equivalent: ip add  <chainedIPs> dev veth-peer on host
 	if err = networking.AddRouteTable(logger, unix.RT_TABLE_MAIN, hostVethPairName, networking.AddrsToString(preInterfaceIPAddress)); err != nil {

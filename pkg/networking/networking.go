@@ -133,7 +133,7 @@ func AddrsToString(addrs []netlink.Addr) []string {
 		} else {
 			addr.IPNet.Mask = net.CIDRMask(128, 128)
 		}
-		addrStrings = append(addrStrings, addr.String())
+		addrStrings = append(addrStrings, addr.IPNet.String())
 	}
 	return addrStrings
 }

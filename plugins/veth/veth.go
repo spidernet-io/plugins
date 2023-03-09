@@ -242,6 +242,7 @@ func setupNeighborhood(logger *zap.Logger, netns ns.NetNS, hostVethPairName stri
 	}
 
 	if !isfirstInterface {
+		// In the pod, we have already add neighbor table, so exit...
 		return nil
 	}
 

@@ -2,6 +2,11 @@ package networking
 
 import (
 	"fmt"
+	"net"
+	"os"
+	"regexp"
+	"strings"
+
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -10,10 +15,6 @@ import (
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
-	"net"
-	"os"
-	"regexp"
-	"strings"
 )
 
 var DefaultInterfacesToExclude = []string{
@@ -86,21 +87,22 @@ func IPAddressOnNode(logger *zap.Logger, ipFamily int) ([]netlink.Addr, error) {
 		return nil, err
 	}
 
-	var ipAddress []netlink.Addr
-	for _, link := range links {
-		exclude := (excludeRegexp != nil) && excludeRegexp.MatchString(link.Attrs().Name)
-		if exclude {
+	var allIPAddress []netlink.Addr
+	for idx, _ := range links {
+		iLink := links[idx]
+		if excludeRegexp.MatchString(iLink.Attrs().Name) {
 			continue
 		}
 
-		ipAddress, err = getAddrs(link, ipFamily)
+		ipAddress, err := getAddrs(iLink, ipFamily)
 		if err != nil {
 			logger.Error(err.Error())
 			return nil, err
 		}
+		allIPAddress = append(allIPAddress, ipAddress...)
 	}
-	logger.Debug("Get IPAddressOnNode", zap.Any("IPAddress", ipAddress))
-	return ipAddress, nil
+	logger.Debug("Get IPAddressOnNode", zap.Any("allIPAddress", allIPAddress))
+	return allIPAddress, nil
 }
 
 func getAddrs(link netlink.Link, ipfamily int) ([]netlink.Addr, error) {
@@ -114,10 +116,10 @@ func getAddrs(link netlink.Link, ipfamily int) ([]netlink.Addr, error) {
 		if addr.IP.IsMulticast() || addr.IP.IsLinkLocalUnicast() {
 			continue
 		}
-		if addr.IP.To4() != nil && (ipfamily == netlink.FAMILY_V4 || ipfamily == netlink.FAMILY_ALL) {
+		if addr.IP.To4() != nil && ipfamily != netlink.FAMILY_V6 {
 			ipAddress = append(ipAddress, addr)
 		}
-		if addr.IP.To4() == nil && (ipfamily == netlink.FAMILY_V6 || ipfamily == netlink.FAMILY_ALL) {
+		if addr.IP.To4() == nil && ipfamily != netlink.FAMILY_V4 {
 			ipAddress = append(ipAddress, addr)
 		}
 	}

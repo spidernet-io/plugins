@@ -3,14 +3,14 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/containernetworking/cni/pkg/version"
-	"github.com/spidernet-io/cni-plugins/pkg/constant"
-	"github.com/spidernet-io/plugins/pkg/logging"
-	"github.com/spidernet-io/plugins/pkg/types"
-	"k8s.io/utils/pointer"
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/containernetworking/cni/pkg/version"
+	"github.com/spidernet-io/plugins/pkg/logging"
+	"github.com/spidernet-io/plugins/pkg/types"
+	"k8s.io/utils/pointer"
 )
 
 // ParseVethConfig parses the supplied configuration (and prevResult) from stdin.
@@ -36,7 +36,7 @@ func ParseVethConfig(stdin []byte) (*types.Veth, error) {
 
 	conf.LogOptions = logging.InitLogOptions(conf.LogOptions)
 	if conf.LogOptions.LogFilePath == "" {
-		conf.LogOptions.LogFilePath = constant.VethLogDefaultFilePath
+		conf.LogOptions.LogFilePath = types.VethLogDefaultFilePath
 	}
 
 	if conf.OnlyHardware {

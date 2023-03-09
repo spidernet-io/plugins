@@ -1,8 +1,9 @@
 package types
 
 import (
-	"github.com/containernetworking/cni/pkg/types"
 	"net"
+
+	"github.com/containernetworking/cni/pkg/types"
 )
 
 type MoveRouteValue int32
@@ -50,3 +51,11 @@ type K8sArgs struct {
 	K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString //revive:disable-line
 	K8S_POD_UID                types.UnmarshallableString //revive:disable-line
 }
+
+const (
+	VethLogDefaultFilePath   = "/var/log/spider-io/veth.log"
+	RouterLogDefaultFilePath = "/var/log/spider-io/router.log"
+	LogDefaultMaxSize        = 100 // megabytes
+	LogDefaultMaxAge         = 5   // days
+	LogDefaultMaxBackups     = 5
+)

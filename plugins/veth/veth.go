@@ -111,9 +111,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	if !isfirstInterface {
-		logger.Info("Calling veth plugin not for the first time", zap.Any("config", conf))
+		logger.Info("Calling veth plugin not for the first time", zap.Any("config", conf), zap.String("netns", netns.Path()))
 	} else {
-		logger.Info("Calling veth plugin for first time", zap.Any("config", conf))
+		logger.Info("Calling veth plugin for first time", zap.Any("config", conf), zap.String("netns", netns.Path()))
 	}
 
 	var hostVethPairName string
@@ -270,11 +270,17 @@ func setupNeighborhood(logger *zap.Logger, netns ns.NetNS, hostVethPairName stri
 // setupRoutes setup routes for pod and host
 // equivalent to: `ip route add $route`
 func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPairName string, ipAddressOnNode, preInterfaceIPAddress []netlink.Addr, conf *ptypes.Veth) error {
-	err := netns.Do(func(_ ns.NetNS) error {
+	v4Gw, v6Gw, err := networking.GetGatewayIP(preInterfaceIPAddress)
+	if err != nil {
+		logger.Error("failed to GetGatewayIP", zap.Error(err))
+		return err
+	}
+
+	err = netns.Do(func(_ ns.NetNS) error {
 		var err error
 		// traffic sent to the node is forwarded via veth0
 		// eq:  "ip r add <ipAddressOnNode> dev veth0 table <ruleTable> "
-		if err = networking.AddRouteTable(logger, ruleTable, defaultConVeth, networking.AddrsToString(ipAddressOnNode)); err != nil {
+		if err = networking.AddRouteTable(logger, ruleTable, netlink.SCOPE_LINK, defaultConVeth, networking.AddrsToString(ipAddressOnNode), nil, nil); err != nil {
 			logger.Error("failed to AddRouteTable for ipAddressOnNode", zap.Error(err))
 			return fmt.Errorf("failed to AddRouteTable for ipAddressOnNode: %v", err)
 		}
@@ -283,7 +289,7 @@ func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPair
 		// eq: ip route add <cluster/service cidr> dev veth0
 		localCIDRs := append(conf.ClusterCIDR, conf.ServiceCIDR...)
 		localCIDRs = append(localCIDRs, conf.AdditionalCIDR...)
-		if err := networking.AddRouteTable(logger, ruleTable, defaultConVeth, localCIDRs); err != nil {
+		if err = networking.AddRouteTable(logger, ruleTable, netlink.SCOPE_UNIVERSE, defaultConVeth, localCIDRs, v4Gw, v6Gw); err != nil {
 			logger.Error("failed to AddRouteTable for localCIDRs", zap.Error(err))
 			return fmt.Errorf("failed to AddRouteTable for localCIDRs: %v", err)
 		}
@@ -292,7 +298,7 @@ func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPair
 		// make sure that all traffic to second NIC to lookup table <<ruleTable>>
 		// eq: ip rule add to <preInterfaceIPAddress> lookup table <ruleTable>
 		if ruleTable != unix.RT_TABLE_MAIN {
-			if err := networking.AddToRuleTable(preInterfaceIPAddress, ruleTable); err != nil {
+			if err = networking.AddToRuleTable(preInterfaceIPAddress, ruleTable); err != nil {
 				logger.Error("failed to AddToRuleTable", zap.Error(err))
 				return fmt.Errorf("failed to AddToRuleTable: %v", err)
 			}
@@ -307,7 +313,8 @@ func setupRoutes(logger *zap.Logger, netns ns.NetNS, ruleTable int, hostVethPair
 
 	// set routes for host
 	// equivalent: ip add  <chainedIPs> dev veth-peer on host
-	if err = networking.AddRouteTable(logger, unix.RT_TABLE_MAIN, hostVethPairName, networking.AddrsToString(preInterfaceIPAddress)); err != nil {
+	if err = networking.AddRouteTable(logger, unix.RT_TABLE_MAIN, netlink.SCOPE_UNIVERSE, hostVethPairName, networking.AddrsToString(preInterfaceIPAddress),
+		nil, nil); err != nil {
 		logger.Error("failed to AddRouteTable for preInterfaceIPAddress", zap.Error(err))
 		return fmt.Errorf("failed to AddRouteTable for preInterfaceIPAddress: %v", err)
 	}

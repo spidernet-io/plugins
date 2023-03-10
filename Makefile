@@ -12,6 +12,7 @@ build:
 	@mkdir -p ./.tmp/bin ; \
 	for plugin in `ls ./plugins/` ; do   \
 		echo "\033[35m ==> building $${plugin} to $(ROOT_DIR)/.tmp/bin/${plugin}  \033[0m" ; \
+		echo "\033[35m ==> $(GO_BUILD_FLAGS) $(GO_BUILD) $(GO_BUILD_LDFLGAS) -o ./.tmp/bin/$${plugin} ./plugins/$${plugin} \033[0m";  \
 		$(GO_BUILD_FLAGS) $(GO_BUILD) $(GO_BUILD_LDFLGAS) -o ./.tmp/bin/$${plugin} ./plugins/$${plugin} ;  \
 	done
 

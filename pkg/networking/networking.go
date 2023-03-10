@@ -20,7 +20,7 @@ import (
 var DefaultInterfacesToExclude = []string{
 	"docker.*", "cbr.*", "dummy.*",
 	"virbr.*", "lxcbr.*", "veth.*", "lo",
-	"cali.*", "tunl.*", "flannel.*", "kube-ipvs.*", "cni.*",
+	"cali.*", "tunl.*", "flannel.*", "kube-ipvs.*", "cni.*", "vx-submariner",
 }
 
 func GetIPFamily(prevResult cnitypes.Result) (int, error) {

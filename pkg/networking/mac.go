@@ -45,13 +45,13 @@ func OverrideHwAddress(logger *zap.Logger, netns ns.NetNS, macPrefix, iface stri
 	}
 
 	// we only focus on first element
-	nAddr, err := netip.ParsePrefix(ips[0].IP.String())
+	nAddr, err := netip.ParseAddr(ips[0].IP.String())
 	if err != nil {
 		logger.Error("failed to ParsePrefix", zap.Error(err))
 		return "", err
 	}
 
-	suffix, err := inetAton(nAddr.Addr())
+	suffix, err := inetAton(nAddr)
 	if err != nil {
 		logger.Error("failed to inetAton", zap.Error(err))
 		return "", err
